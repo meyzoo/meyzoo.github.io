@@ -1,0 +1,139 @@
+/*
+ * Check whether there are angle brackets in the input.  If so, return the context of the first.
+ * Otherwise, return the empty string.
+ */
+function htmlCheck ( inputHtml )
+{
+	var htmlRegex = /(.{0,10}[<>].{0,10})/
+	var match = htmlRegex.exec(inputHtml)
+
+	if ( match == undefined )
+	{
+		return ""
+	}
+
+	return match[0]
+}
+
+/*
+ * Accept HTML-encrusted text as input.  Strip all the "text-format" tags and replace them with
+ * proper Conversationboard-bbcode equivalents.  Not all such tags are covered here.
+ */
+function bbCodeizeText ( inputHtml )
+{
+	/* There are no preservable attributes for these tags.  Ignore them. */
+	var textRegex = /<(u|b|i|s|strike|del|blockquote|pre)[^>]*?>(.*?)<\/\1\s*>/i
+	var match 
+
+	while ( (match = textRegex.exec(inputHtml)) != undefined )
+	{
+		var tag = match[1]
+		var content = match[2]
+
+		if ( tag == "blockquote" ) 
+		{ 
+			tag = "quote" 
+		}
+                else if ( tag == "strike" || tag == "del" )
+                {
+                        tag = "s"
+                }
+                else if ( tag == "pre" )
+                {
+                        tag = "code"
+                }
+		inputHtml = inputHtml.replace(textRegex, "[" + tag + "]" + content + "[/" + tag + "]")
+	}
+
+	return inputHtml
+}
+
+/*
+ * Find HTML img tags and replace them with Conversationboard-bbcode equivalents.
+ */
+function bbCodeizeImg ( inputHtml )
+{
+	/* 
+	 * The only attribute we care about here is src.  Ignore the rest. 
+	 */
+	var imageRegex = /<img\s+(?:[^>]+\s)?src\s*=\s*(["'][^"'>]+["']|[^\s'">]*)(?:[^>]*)>/i
+	var match 
+
+	while ( (match = imageRegex.exec(inputHtml)) != undefined )
+	{
+		var imageSource = match[1]
+
+		if ( imageSource.charAt(0) == '"' || imageSource.charAt(0) == "'" )
+		{
+			imageSource = imageSource.substring(1, imageSource.length - 1)
+		}
+
+		if ( imageSource.substring(0, 7) == "http://" )
+		{
+			imageSource = imageSource.substring(7)
+		}
+
+		imageSource = "http://" + escape(unescape(imageSource))
+
+		inputHtml = inputHtml.replace(imageRegex, "[img]" + imageSource + "[/img]")
+	}
+
+	return inputHtml
+}
+
+/*
+ * Search for HTML HTTP links in the input.  Replace them with Conversationboard-bbcode equivalents, and
+ * return the sanitized string.
+ */
+function bbCodeizeLink ( inputHtml )
+{
+	/* 
+	 * Ignore all atributes but href.  Don't support unbalanced quotes.  Ignore whitespace in the URI
+	 * unless it's quote-protected.
+	 */
+	var linkRegex = /<a\s+(?:[^>]+\s)?href\s*=\s*(["'][^"'>]+["']|http:\/\/[^\s"'>]*)(?:[^>]*)>(.*?)<\/a>/i
+	var match 
+
+	while ( (match = linkRegex.exec(inputHtml)) != undefined )
+	{
+		var linkSource = match[1]
+
+		/* Remove a leading quote from the href, if needed. */
+		if ( linkSource.charAt(0) == '"' || linkSource.charAt(0) == "'" )
+		{
+			linkSource = linkSource.substring(1, linkSource.length - 1)
+		}
+		
+		/* Clean up URIs without "http://".  There's definitely no call to support relative links.  */
+		if ( linkSource.substring(0, 7) == "http://" )
+		{
+			linkSource = linkSource.substring(7)
+		}
+		linkSource = "http://" + escape(unescape(linkSource))
+
+		inputHtml = inputHtml.replace(linkRegex, "[url=" + linkSource + "]" + match[2] + "[/url]")
+	}
+
+	return inputHtml
+}
+
+function bbCodeizeFull ( inputHtml )
+{
+	return bbCodeizeText(bbCodeizeLink(bbCodeizeImg(inputHtml)))
+}
+
+function bbCodeFix ( textareaId )
+{
+	var inputBox = document.getElementById(textareaId)
+	inputBox.value = bbCodeizeFull(inputBox.value)
+
+	var unmatchedHtml = htmlCheck(inputBox.value)
+
+	if ( unmatchedHtml != "" )
+	{
+		alert("WARNING: Unprocessed HTML characters detected.  Context:\n" + unmatchedHtml)
+		return false
+	}
+
+	return true
+}
